@@ -1,0 +1,51 @@
+
+name: Descargar Histórico Anual PVPC
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_year:
+        description: "Año a descargar (dejar vacío para descargar automáticamente el año pasado)"
+        required: false
+        default: ""
+  schedule:
+    # Se ejecuta automáticamente cada 2 de enero a las 08:00 UTC para archivar el año recién cerrado
+    - cron: "0 8 2 1 *"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-pvpc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar descarga de histórico PVPC
+        env:
+          ESIOS_TOKEN: ${{ secrets.ESIOS_TOKEN }}
+          TARGET_YEAR: ${{ github.event.inputs.target_year }}
+        run: python fetch_pvpc_anual.py
+
+      - name: Commit y push de los datos generados
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "Sin cambios nuevos en data/."
+          else
+            git commit -m "chore(data): actualizar histórico anual PVPC"
+            git push
+          fi
